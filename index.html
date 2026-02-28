@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CUBES - Cool Underground Boxes Ecosystem</title>
+    <style>
+        :root {
+            --bg-color: #0b0014; /* FIXED: Removed the accidental var() wrapper here */
+            --panel-bg: #1a0b2e;
+            --primary-color: #b026ff; 
+            --primary-hover: #c457ff;
+            --available-color: #3a0ca3; 
+            --occupied-color: #2b1b3d; 
+            --selected-color: #00f5d4; 
+            --text-main: #ffffff;
+            --text-muted: #a092b0;
+            --overlay-color: rgba(0, 0, 0, 0.7);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden; 
+        }
+
+ /* --- Sidebar & Header Styles --- */
+        .header {
+            position: relative; /* <-- THIS IS THE FIX */
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 15px;
+            background: var(--panel-bg);
+            border-bottom: 1px solid rgba(176, 38, 255, 0.2);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+
+        .hamburger {
+            position: absolute;
+            left: 15px;
+            top: 50%; /* Pushes it halfway down the header */
+            transform: translateY(-50%); /* Perfectly centers it vertically */
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 10px; /* Made the touch target a bit larger for fingers! */
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            z-index: 1000;
+        }
+        .hamburger div {
+            width: 25px;
+            height: 3px;
+            background-color: var(--primary-color);
+            border-radius: 2px;
+            box-shadow: 0 0 5px var(--primary-color);
+        }
+
+        .title-wrapper { text-align: center; }
+
+        h1 {
+            color: var(--primary-color);
+            margin: 0;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-size: 1.5rem;
+            text-shadow: 0 0 10px rgba(176, 38, 255, 0.5);
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+
+        .sidebar {
+            height: 100%;
+            width: 250px;
+            position: fixed;
+            z-index: 1001;
+            top: 0;
+            left: -250px;
+            background-color: var(--panel-bg);
+            border-right: 1px solid var(--primary-color);
+            box-shadow: 5px 0 15px rgba(0,0,0,0.8);
+            transition: left 0.3s ease;
+            padding-top: 60px;
+        }
+
+        .sidebar.open { left: 0; }
+
+        .sidebar a {
+            padding: 15px 25px;
+            text-decoration: none;
+            font-size: 1.2rem;
+            color: var(--text-muted);
+            display: block;
+            transition: 0.2s;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .sidebar a:hover, .sidebar a.active-link {
+            color: var(--primary-color);
+            background-color: rgba(176, 38, 255, 0.1);
+            padding-left: 30px;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 10px;
+            right: 20px;
+            font-size: 36px;
+            color: var(--primary-color);
+            background: none;
+            border: none;
+            cursor: pointer;
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: var(--overlay-color);
+            z-index: 999;
+            display: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .overlay.active {
+            display: block;
+            opacity: 1;
+        }
+
+        /* --- View Controller --- */
+        .app-view {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            flex-grow: 1;
+            width: 100%;
+            overflow-y: auto;
+            padding: 20px 15px;
+        }
+
+        .app-view.active {
+            display: flex;
+        }
+
+        /* --- Dashboard Styles --- */
+        .container {
+            display: flex; flex-direction: column; gap: 20px; width: 100%; max-width: 800px;
+        }
+
+        .panel {
+            background: var(--panel-bg); padding: 20px; border-radius: 8px; width: 100%;
+            border: 1px solid rgba(176, 38, 255, 0.2); box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+        }
+
+        .panel h3 { margin-top: 0; color: var(--primary-color); border-bottom: 1px solid rgba(176, 38, 255, 0.3); padding-bottom: 10px; }
+
+        .rack { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; width: 100%; }
+
+        .box {
+            width: 100%; aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+            border-radius: 4px; font-weight: 900; font-size: 1.1rem; cursor: pointer; transition: all 0.2s ease;
+            box-shadow: 3px 3px 0px rgba(0,0,0,0.6); border: 2px solid transparent;
+        }
+
+        .box.available { background-color: var(--available-color); color: white; border-color: #561bbd; }
+        .box.occupied { background-color: var(--occupied-color); color: #4f3b63; cursor: not-allowed; box-shadow: inset 2px 2px 5px rgba(0,0,0,0.5); }
+        .box.selected { background-color: var(--selected-color); color: #000; border-color: #ffffff; box-shadow: 5px 5px 15px rgba(0, 245, 212, 0.4); }
+
+        .legend { display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 20px; justify-content: center; width: 100%; }
+        .legend-item { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+        .legend-box { width: 18px; height: 18px; border-radius: 2px; }
+
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.9rem; color: var(--text-muted); }
+        .form-group input, .form-group select { width: 100%; padding: 10px; background-color: #0f051a; color: white; border: 1px solid var(--primary-color); border-radius: 4px; font-family: inherit; }
+        
+        button.action-btn {
+            width: 100%; padding: 12px; background-color: var(--primary-color); color: white; border: none;
+            border-radius: 4px; font-size: 16px; font-weight: bold; text-transform: uppercase; cursor: pointer; transition: all 0.2s;
+        }
+        button.action-btn:disabled { background-color: #3b224d; color: #6a587d; cursor: not-allowed; }
+
+        /* --- Chatbot Styles --- */
+        .chat-wrapper {
+            width: 100%;
+            max-width: 600px;
+            display: flex;
+            flex-direction: column;
+            height: 100%; 
+            background: var(--panel-bg);
+            border-radius: 8px;
+            border: 1px solid rgba(176, 38, 255, 0.2);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+            overflow: hidden;
+        }
+
+        .chat-header {
+            padding: 15px; background: rgba(176, 38, 255, 0.1); border-bottom: 1px solid rgba(176, 38, 255, 0.2);
+            text-align: center; font-weight: bold; color: var(--selected-color);
+        }
+
+        .chat-messages {
+            flex-grow: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px;
+        }
+
+        .message {
+            max-width: 80%; padding: 10px 15px; border-radius: 8px; font-size: 0.95rem; line-height: 1.4; word-wrap: break-word;
+        }
+
+        .message.bot {
+            background-color: var(--occupied-color); color: var(--text-main); align-self: flex-start;
+            border-bottom-left-radius: 0; border: 1px solid #3b224d;
+        }
+
+        .message.user {
+            background-color: var(--primary-color); color: white; align-self: flex-end;
+            border-bottom-right-radius: 0; box-shadow: 2px 2px 10px rgba(176, 38, 255, 0.3);
+        }
+
+        .chat-input-area {
+            display: flex; padding: 15px; background: #0f051a; border-top: 1px solid rgba(176, 38, 255, 0.2); gap: 10px;
+        }
+
+        .chat-input-area input {
+            flex-grow: 1; padding: 10px 15px; background-color: var(--panel-bg); color: white;
+            border: 1px solid #3b224d; border-radius: 20px; font-family: inherit; outline: none;
+        }
+
+        .chat-input-area input:focus { border-color: var(--selected-color); }
+
+        .chat-send-btn {
+            background-color: var(--selected-color); color: #000; border: none; width: 40px; height: 40px;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="mySidebar" class="sidebar">
+        <button class="close-btn" onclick="toggleSidebar()">×</button>
+        <a href="#" id="link-dashboard" class="active-link" onclick="navigateApp('Dashboard')"> Dashboard</a>
+        <a href="#" onclick="alert('Feature in development!')"> My Cubes</a>
+        <a href="#" id="link-chatbot" onclick="navigateApp('AI Chatbot')"> AI Chatbot</a>
+        <a href="#" onclick="alert('Feature in development!')"> Payment History</a>
+        <a href="#" onclick="alert('Feature in development!')"> Settings</a>
+        <a href="#" onclick="alert('Feature in development!')"> Support</a>
+    </div>
+
+    <div id="menuOverlay" class="overlay" onclick="toggleSidebar()"></div>
+
+    <div class="header">
+        <button class="hamburger" onclick="toggleSidebar()">
+            <div></div><div></div><div></div>
+        </button>
+        <div class="title-wrapper">
+            <h1 id="headerTitle">CUB</h1>
+            <div class="subtitle" id="headerSubtitle">Cool Underground Boxes</div>
+        </div>
+    </div>
+
+    <div id="view-dashboard" class="app-view active">
+        <div class="legend">
+            <div class="legend-item"><div class="legend-box" style="background: var(--available-color); border: 1px solid #561bbd;"></div> Available</div>
+            <div class="legend-item"><div class="legend-box" style="background: var(--occupied-color);"></div> Occupied</div>
+            <div class="legend-item"><div class="legend-box" style="background: var(--selected-color);"></div> Selected</div>
+        </div>
+
+        <div class="container">
+            <div class="panel">
+                <h3>Underground Vault Alpha</h3>
+                <div class="rack" id="boxRack"></div>
+            </div>
+
+            <div class="panel">
+                <h3>Secure a Cube</h3>
+                <p id="selectionText" style="color: var(--text-muted);">Select an available cube to begin.</p>
+                <form id="reservationForm">
+                    <div class="form-group">
+                        <label>Cube ID</label>
+                        <input type="text" id="selectedBoxInput" readonly placeholder="None selected">
+                    </div>
+                    <div class="form-group">
+                        <label>Operative Name</label>
+                        <input type="text" id="userName" required placeholder="Enter your name" disabled>
+                    </div>
+                    <div class="form-group">
+                        <label>Lease Duration</label>
+                        <select id="leaseDuration" disabled>
+                            <option value="1">1 Month</option>
+                            <option value="3">3 Months</option>
+                            <option value="6">6 Months</option>
+                        </select>
+                    </div>
+                    <button type="submit" id="submitBtn" class="action-btn" disabled>Initialize Lease</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div id="view-chatbot" class="app-view">
+        <div class="chat-wrapper">
+            <div class="chat-header">C.U.B.E.S Mainframe AI</div>
+            <div class="chat-messages" id="chatMessages">
+                <div class="message bot">
+                    Greetings, operative. I am the CUBES ecosystem management AI. How can I assist you with your storage needs today?
+                </div>
+            </div>
+            <div class="chat-input-area">
+                <input type="text" id="chatInput" placeholder="Type a message..." autocomplete="off" onkeypress="handleChatKeyPress(event)">
+                <button class="chat-send-btn" onclick="sendChatMessage()">➤</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Navigation Logic (Highly Compatible JS) ---
+        function toggleSidebar() {
+            var sidebar = document.getElementById("mySidebar");
+            var overlay = document.getElementById("menuOverlay");
+            
+            if (sidebar.className.indexOf("open") === -1) {
+                sidebar.className += " open";
+                overlay.style.display = "block";
+                setTimeout(function() { overlay.className += " active"; }, 10);
+            } else {
+                sidebar.className = sidebar.className.replace(" open", "");
+                overlay.className = overlay.className.replace(" active", "");
+                setTimeout(function() { overlay.style.display = "none"; }, 300);
+            }
+        }
+
+        function navigateApp(sectionName) {
+            toggleSidebar(); // Close menu
+            
+            // Hide all views using safe older JS loops
+            var views = document.querySelectorAll('.app-view');
+            for (var i = 0; i < views.length; i++) {
+                views[i].className = views[i].className.replace(" active", "");
+            }
+            
+            // Remove active highlight from all sidebar links
+            var links = document.querySelectorAll('.sidebar a');
+            for (var j = 0; j < links.length; j++) {
+                links[j].className = links[j].className.replace(" active-link", "");
+            }
+
+            // Show selected view
+            if (sectionName === 'Dashboard') {
+                document.getElementById('view-dashboard').className += " active";
+                document.getElementById('link-dashboard').className += " active-link";
+                document.getElementById('headerTitle').innerText = 'CUBES';
+                document.getElementById('headerSubtitle').innerText = 'Cool Underground Boxes Ecosystem';
+            } else if (sectionName === 'AI Chatbot') {
+                document.getElementById('view-chatbot').className += " active";
+                document.getElementById('link-chatbot').className += " active-link";
+                document.getElementById('headerTitle').innerText = 'MAINFRAME AI';
+                document.getElementById('headerSubtitle').innerText = 'Virtual Assistant Protocol';
+            }
+        }
+
+        // --- Chatbot Logic ---
+        var chatMessages = document.getElementById('chatMessages');
+        var chatInput = document.getElementById('chatInput');
+
+        function handleChatKeyPress(event) {
+            if (event.keyCode === 13 || event.key === 'Enter') {
+                sendChatMessage();
+            }
+        }
+
+        function sendChatMessage() {
+            var text = chatInput.value.trim();
+            if (!text) return;
+
+            appendMessage(text, 'user');
+            chatInput.value = '';
+
+            setTimeout(function() {
+                generateBotResponse(text);
+            }, 800);
+        }
+
+        function appendMessage(text, sender) {
+            var msgDiv = document.createElement('div');
+            msgDiv.className = 'message ' + sender;
+            msgDiv.innerText = text;
+            chatMessages.appendChild(msgDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function generateBotResponse(userText) {
+            var lowerText = userText.toLowerCase();
+            var reply = "I am processing your request. Please stand by.";
+
+            if (lowerText.indexOf('hello') > -1 || lowerText.indexOf('hi') > -1) {
+                reply = "Hello. CUBES systems are fully operational.";
+            } else if (lowerText.indexOf('rent') > -1 || lowerText.indexOf('lease') > -1 || lowerText.indexOf('book') > -1) {
+                reply = "To rent a cube, please return to the Dashboard using the side menu, tap an 'Available' blue cube, and fill out your operative details.";
+            } else if (lowerText.indexOf('price') > -1 || lowerText.indexOf('cost') > -1) {
+                reply = "Standard cubes are currently 50 credits per month. Longer leases offer a 10% discount.";
+            } else if (lowerText.indexOf('help') > -1) {
+                reply = "I can assist you with renting cubes, checking pricing, or explaining the CUBES ecosystem. What do you need?";
+            }
+
+            appendMessage(reply, 'bot');
+        }
+
+        // --- Box Renting Logic ---
+        var boxData = [
+            { id: 'C1', status: 'available' }, { id: 'C2', status: 'occupied' }, { id: 'C3', status: 'available' }, { id: 'C4', status: 'available' },
+            { id: 'C5', status: 'occupied' }, { id: 'C6', status: 'occupied' }, { id: 'C7', status: 'available' }, { id: 'C8', status: 'available' },
+            { id: 'C9', status: 'available' }, { id: 'C10', status: 'available' }, { id: 'C11', status: 'available' }, { id: 'C12', status: 'occupied' },
+            { id: 'C13', status: 'available' }, { id: 'C14', status: 'available' }, { id: 'C15', status: 'occupied' }, { id: 'C16', status: 'available' }
+        ];
+
+        var currentSelection = null;
+        var rackElement = document.getElementById('boxRack');
+
+        function renderRack() {
+            rackElement.innerHTML = ''; 
+            for (var i = 0; i < boxData.length; i++) {
+                (function(box) {
+                    var boxDiv = document.createElement('div');
+                    boxDiv.className = 'box ' + box.status;
+                    if (currentSelection === box.id) {
+                        boxDiv.className += ' selected';
+                    }
+                    boxDiv.innerText = box.id;
+                    boxDiv.onclick = function() { handleBoxClick(box); };
+                    rackElement.appendChild(boxDiv);
+                })(boxData[i]);
+            }
+        }
+
+        function handleBoxClick(box) {
+            if (box.status === 'occupied') return;
+            if (currentSelection === box.id) {
+                currentSelection = null;
+                updateFormState(false, '');
+            } else {
+                currentSelection = box.id;
+                updateFormState(true, box.id);
+            }
+            renderRack(); 
+        }
+
+        function updateFormState(hasSelection, boxId) {
+            var selectedBoxInput = document.getElementById('selectedBoxInput');
+            var selectionText = document.getElementById('selectionText');
+            var userNameInput = document.getElementById('userName');
+            var leaseDurationSelect = document.getElementById('leaseDuration');
+            var submitBtn = document.getElementById('submitBtn');
+
+            if (hasSelection) {
+                selectedBoxInput.value = boxId;
+                selectionText.innerHTML = 'Cube <strong style="color: var(--selected-color);">' + boxId + '</strong> tapped. Enter operative details to secure.';
+                selectionText.style.color = 'var(--text-main)';
+                userNameInput.disabled = false; 
+                leaseDurationSelect.disabled = false; 
+                submitBtn.disabled = false;
+            } else {
+                selectedBoxInput.value = '';
+                selectionText.innerText = 'Select an available cube to begin.';
+                selectionText.style.color = 'var(--text-muted)';
+                userNameInput.disabled = true; 
+                leaseDurationSelect.disabled = true; 
+                submitBtn.disabled = true;
+                userNameInput.value = ''; 
+            }
+        }
+
+        document.getElementById('reservationForm').onsubmit = function(e) {
+            e.preventDefault();
+            var name = document.getElementById('userName').value;
+            var duration = document.getElementById('leaseDuration').value;
+            alert('CUBE SECURED: ' + currentSelection + ' allocated to ' + name + ' for ' + duration + ' month(s).');
+            
+            for (var i = 0; i < boxData.length; i++) {
+                if (boxData[i].id === currentSelection) {
+                    boxData[i].status = 'occupied';
+                    break;
+                }
+            }
+            
+            currentSelection = null;
+            updateFormState(false, '');
+            renderRack();
+        };
+
+        // Initialize
+        renderRack();
+    </script>
+</body>
+</html>
